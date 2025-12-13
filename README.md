@@ -1,84 +1,86 @@
-# Instant Melon (即刻瓜田)
+# 🍉 Instant Melon (即刻瓜田)
 
-一个基于 React + Vite + Express 的轻量级匿名投稿与吃瓜平台。
-数据存储采用本地 JSON 文件，无需外部数据库，部署极其简单。
+**一个基于 React + Express + PostgreSQL 的现代化匿名投稿与吃瓜平台。**
+支持 AI 毒舌总结、实时评论互动、无限流加载，均已容器化，一键部署。
 
-## 功能特性
+![Instant Melon UI](https://via.placeholder.com/800x400?text=Instant+Melon+Preview)
 
-- 🍉 **匿名投稿**：用户可以发布故事，支持 AI 自动总结（需配置 API Key）。
-- 💬 **评论互动**：支持对故事进行评论。
-- ❤️ **点赞**：双击卡片或点击爱心点赞。
-- 🌓 **主题切换**：支持明暗模式。
-- 📱 **响应式设计**：完美适配移动端与桌面端。
+## ✨ 核心特性
 
-## 部署指南 (腾讯云/阿里云等 Linux 服务器)
+- **🎭 匿名投稿**：畅所欲言，系统自动生成唯一瓜号。
+- **🤖 AI 毒舌总结**：集成 AI (GPT-4o-mini)，自动为每个瓜生成少于 30 字的“毒舌锐评”，并在后端增加随机性与反缓存机制，拒绝千篇一律。
+- **💬 实时评论**：支持评论区实时轮询 (Polling)，不用刷新页面即可看到最新吐槽。
+- **⚡️ 极致性能**：
+    - 后端支持分页查询 (Limit/Offset)。
+    - 前端实现无限滚动 (Infinite Scroll)，智能预加载。
+- **🎨 沉浸体验**：
+    - 粒子特效背景 (Particle Background)。
+    - 丝滑的 UI 动画与卡片切换。
+    - 明/暗模式一键切换。
+- **� 全栈容器化**：前端、后端、数据库完全 Docker 化，部署仅需一行命令。
+
+## 🛠️ 技术栈
+
+- **前端**: React 18, Vite, Tailwind CSS, Lucide Icons
+- **后端**: Node.js, Express, `pg` (PostgreSQL Client)
+- **数据库**: PostgreSQL 15
+- **运维**: Docker, Docker Compose
+
+## 🚀 极速部署指南 (Docker)
+
+本可以直接部署在任何支持 Docker 的 Linux 服务器上（如腾讯云、阿里云）。
 
 ### 1. 环境准备
-确保服务器已安装 Node.js (推荐 v18+)。
-```bash
-# 安装 nvm (Node Version Manager)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-source ~/.bashrc
-nvm install 20
-node -v
-```
+确保服务器已安装 Docker 和 Docker Compose。
 
 ### 2. 获取代码
 ```bash
-git clone <你的GitHub仓库地址>
+git clone <你的仓库地址>
 cd Instant-Melon
 ```
 
-### 3. 安装依赖与构建
+### 3. 一键启动
 ```bash
-# 安装依赖
-npm install
+docker compose up --build -d
+```
+> **注意**: 如果提示 `docker compose` 命令不存在，请尝试使用 `docker-compose`。
 
-# 构建前端静态资源
-npm run build
+### 4. 访问服务
+服务将在 **3000** 端口运行。请确保服务器防火墙（安全组）已放行 TCP:3000。
+访问地址: `http://<服务器IP>:3000`
+
+---
+
+## 🔧 开发与调试
+
+### 目录结构
+- `/src`: 前端 React 代码
+- `/server.js`: 后端 Express 入口
+- `/postgres-data`: 数据库持久化文件 (自动生成, 勿删)
+- `docker-compose.yml`: 容器编排配置
+- `Dockerfile`: 多阶段构建定义
+
+### 常用管理命令
+
+**查看日志:**
+```bash
+docker compose logs -f --tail=50
 ```
 
-### 4. 启动服务
-
-**临时启动 (测试用):**
+**重启服务 (更新代码后):**
 ```bash
-npm start
-```
-服务将在 `http://localhost:3000` 运行。
-
-**生产环境后台启动 (推荐):**
-使用 PM2 管理进程，保证服务崩溃自动重启。
-```bash
-# 安装 PM2
-npm install -g pm2
-
-# 启动服务
-pm2 start server.js --name "instant-melon"
-
-# 查看状态
-pm2 status
-
-# 设置开机自启
-pm2 startup
-pm2 save
+docker compose down
+docker compose up --build -d
 ```
 
-### 5. 配置访问
-确保服务器防火墙（安全组）已开放 3000 端口（或你自定义的端口）。
-现在你可以通过 `http://服务器IP:3000` 访问了！
-
-## 配置说明
-
-- **端口**: 默认 `3000`。可通过环境变量 `PORT` 修改。
-- **数据**: 数据存储在 `data.json` 文件中。备份该文件即可备份所有数据。
-- **AI 接口**: 默认代理到外部 API，如需修改 key 或接口地址，请修改 `server.js` 中的 `/api/ai` 路由部分。
-
-## 本地开发
-
+**重置数据库 (清空所有数据):**
 ```bash
-npm install
-npm run dev
+docker compose exec db psql -U admin -d instant_melon -c "TRUNCATE TABLE stories, comments RESTART IDENTITY CASCADE;"
 ```
-前端运行在 `http://localhost:5173`，后端 API 需要单独启动 `node server.js` (注意端口跨域配置，开发环境建议使用 Vite 代理)。
 
-由于本项目已针对生产环境优化，开发时建议直接运行 `npm run build && npm start` 查看最终效果，或者手动配置 Vite 代理指向 Express 服务。
+## 🔒 安全说明
+- OpenAI API Key 已移至后端 (`server.js`)，前端通过代理访问，密钥不泄露。
+- 数据库密码在 `docker-compose.yml` 中配置 (生产环境建议修改)。
+
+---
+*Built with ❤️ by Instant Melon Team*
