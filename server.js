@@ -1,122 +1,154 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import pg from 'pg';
 
+const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'data.json');
+
+// Database Connection
+const pool = new Pool({
+    user: process.env.DB_USER || 'admin',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'instant_melon',
+    password: process.env.DB_PASSWORD || 'password',
+    port: 5432,
+});
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
 app.use(express.static(path.join(__dirname, 'dist')));
-
-// Initialize Data File
-if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ stories: [], comments: [] }, null, 2));
-}
-
-// Helper to read/write data
-const readData = () => JSON.parse(fs.readFileSync(DATA_FILE));
-const writeData = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
 // API Routes
 
 // 1. Get Stories
-app.get('/api/stories', (req, res) => {
+app.get('/api/stories', async (req, res) => {
     try {
-        const data = readData();
-        // Return stories with their comments, ordered by date desc
-        // First, sort all stories by date ASC to assign correct sequential IDs
-        const allStoriesSorted = [...data.stories].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        
-        // Map original stories to include their sequential index (1-based)
-        const storiesWithIndex = allStoriesSorted.map((story, index) => ({
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        // Fetch stories with their comments nested
+        const result = await pool.query(`
+            SELECT s.*, 
+            COALESCE(
+                (
+                    SELECT json_agg(c ORDER BY c.created_at DESC)
+                    FROM comments c
+                    WHERE c.story_id = s.id
+                ), 
+                '[]'
+            ) AS comments
+            FROM stories s
+            ORDER BY s.id DESC
+            LIMIT $1 OFFSET $2
+        `, [limit, offset]);
+
+        // Map database ID to displayId for frontend compatibility
+        // Also map snake_case DB fields to camelCase for frontend
+        const stories = result.rows.map(story => ({
             ...story,
-            displayId: index + 1 // 1-based index
+            displayId: story.id,
+            aiSummary: story.ai_summary // Fix: Map DB snake_case to frontend camelCase
         }));
 
-        // Now process for response: filter comments and sort DESC for display
-        const finalStories = storiesWithIndex.map(story => {
-            const storyComments = data.comments.filter(c => c.story_id === story.id);
-            // Sort comments desc
-            storyComments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            return { ...story, comments: storyComments };
-        }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-        res.json(finalStories);
+        res.json(stories);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
 
 // 2. Post Story
-app.post('/api/stories', (req, res) => {
+app.post('/api/stories', async (req, res) => {
     try {
         const { content, aiSummary } = req.body;
-        const data = readData();
-        const newStory = {
-            id: Date.now(),
-            content,
-            aiSummary,
-            likes: 0,
-            created_at: new Date().toISOString()
-        };
-        data.stories.unshift(newStory);
-        writeData(data);
+        const result = await pool.query(
+            'INSERT INTO stories (content, ai_summary, likes) VALUES ($1, $2, 0) RETURNING *',
+            [content, aiSummary]
+        );
+        const newStory = result.rows[0];
+        // Format for frontend
+        newStory.displayId = newStory.id;
+        newStory.aiSummary = newStory.ai_summary; // Fix: Map DB snake_case to frontend camelCase
+        newStory.comments = [];
+
         res.json(newStory);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
 
 // 3. Like Story
-app.post('/api/stories/:id/like', (req, res) => {
+app.post('/api/stories/:id/like', async (req, res) => {
     try {
         const { id } = req.params;
-        const { likes } = req.body; // Expecting the new like count
-        const data = readData();
-        const storyIndex = data.stories.findIndex(s => s.id == id);
+        const { likes } = req.body;
 
-        if (storyIndex !== -1) {
-            data.stories[storyIndex].likes = likes;
-            writeData(data);
+        // Note: In a real app we'd increment transactionally, but here we just set the value 
+        // derived from frontend to keep logic identical to before.
+        // Better: UPDATE stories SET likes = likes + 1 ... but frontend sends absolute value.
+        // Let's stick to setting it.
+        const result = await pool.query(
+            'UPDATE stories SET likes = $1 WHERE id = $2 RETURNING likes',
+            [likes, id]
+        );
+
+        if (result.rowCount > 0) {
             res.json({ success: true, likes: likes });
         } else {
             res.status(404).json({ error: "Story not found" });
         }
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// 4. Post Comment
-app.post('/api/comments', (req, res) => {
+// 4. Comments API
+app.get('/api/comments', async (req, res) => {
+    try {
+        const { story_id } = req.query;
+        if (!story_id) return res.status(400).json({ error: "story_id is required" });
+
+        const result = await pool.query(
+            'SELECT * FROM comments WHERE story_id = $1 ORDER BY created_at DESC',
+            [story_id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/comments', async (req, res) => {
     try {
         const { story_id, text, user = "匿名用户" } = req.body;
-        const data = readData();
-
-        const newComment = {
-            id: Date.now(),
-            story_id: Number(story_id), // Ensure type match
-            user,
-            text,
-            created_at: new Date().toISOString()
-        };
-
-        data.comments.unshift(newComment);
-        writeData(data);
-        res.json(newComment);
+        const result = await pool.query(
+            'INSERT INTO comments (story_id, "user", text) VALUES ($1, $2, $3) RETURNING *',
+            [story_id, user, text]
+        );
+        res.json(result.rows[0]);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
+
+const OPENAI_API_KEY = "sk-EaIEkoMJooD2u40rZM3BJdmZyusfeaHCuHJAXedjBGL3QsmK"; // Hardcoded for now per plan, ideally in .env
 
 // 5. AI Proxy 
 app.post('/api/ai', async (req, res) => {
@@ -125,7 +157,8 @@ app.post('/api/ai', async (req, res) => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": req.headers.authorization, // Pass through the key from frontend (or hardcode here)
+                // Server injects the key, replacing whatever frontend sent (or didn't send)
+                "Authorization": `Bearer ${OPENAI_API_KEY}`,
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             },
             body: JSON.stringify(req.body)
@@ -138,11 +171,11 @@ app.post('/api/ai', async (req, res) => {
     }
 });
 
-// Fallback for SPA (Serve index.html for any unknown route)
+// Fallback for SPA
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server (PostgreSQL) running at http://localhost:${PORT}`);
 });

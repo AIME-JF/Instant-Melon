@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: instant_melon_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: instant_melon
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d instant_melon"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  app:
+    build: .
+    container_name: instant_melon_app
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_HOST=db
+      - DB_USER=admin
+      - DB_PASSWORD=password
+      - DB_NAME=instant_melon
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always

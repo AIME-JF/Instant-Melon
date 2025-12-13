@@ -1,245 +1,9 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { MessageSquare, Heart, Share2, Send, Sparkles, Plus, X, ChevronDown, Quote, Star, Moon, Sun, Check } from 'lucide-react';
-import { supabase } from './supabaseClient';
-
-// --- 新版图标：西瓜时钟 (Melon Clock) ---
-const MelonClockIcon = ({ size = 24, className = "", isSpinning = false }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="7" strokeOpacity="0.2" />
-    <path d="M12 7V7.01" strokeWidth="3" />
-    <path d="M17 12V12.01" strokeWidth="3" />
-    <path d="M12 17V17.01" strokeWidth="3" />
-    <path d="M7 12V12.01" strokeWidth="3" />
-    <g className={isSpinning ? "animate-clock-spin" : ""} style={{ transformOrigin: "12px 12px" }}>
-      <path d="M12 12L12 9" />
-      <path d="M12 12L14.5 14.5" />
-    </g>
-  </svg>
-);
-
-// --- 修复版打字机 Hook ---
-const useTypewriter = (text, speed = 30, startDelay = 300) => {
-  const [displayedText, setDisplayedText] = useState("");
-  const [isTyping, setIsTyping] = useState(true);
-
-  useLayoutEffect(() => {
-    setIsTyping(true);
-    setDisplayedText("");
-  }, [text]);
-
-  useEffect(() => {
-    if (!text) {
-      setIsTyping(false);
-      return;
-    }
-    let timeoutId;
-    let currentIndex = 0;
-    const startTimeout = setTimeout(() => {
-      const typeChar = () => {
-        if (currentIndex < text.length) {
-          setDisplayedText(text.slice(0, currentIndex + 1));
-          currentIndex++;
-          const char = text[currentIndex - 1];
-          const delay = (char === '，' || char === '。' || char === '？' || char === '！') ? speed * 8 : speed;
-          timeoutId = setTimeout(typeChar, delay);
-        } else {
-          setIsTyping(false);
-        }
-      };
-      typeChar();
-    }, startDelay);
-    return () => { clearTimeout(startTimeout); clearTimeout(timeoutId); };
-  }, [text, speed, startDelay]);
-
-  return { displayedText, isTyping };
-};
-
-// --- Toast 通知组件 ---
-const Toast = ({ message, isVisible, onClose, theme }) => {
-  useEffect(() => {
-    if (isVisible) {
-      const timer = setTimeout(onClose, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isVisible, onClose]);
-
-  if (!isVisible) return null;
-
-  const isDark = theme === 'dark';
-  const bgColor = isDark ? 'bg-zinc-800' : 'bg-white';
-  const textColor = isDark ? 'text-white' : 'text-zinc-900';
-  const borderColor = isDark ? 'border-white/10' : 'border-black/5';
-
-  return (
-    <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-6 py-3 rounded-full shadow-xl border ${bgColor} ${textColor} ${borderColor} animate-fade-in-down`}>
-      <Check size={16} className={isDark ? "text-emerald-400" : "text-emerald-600"} />
-      <span className="text-sm font-medium tracking-wide">{message}</span>
-    </div>
-  );
-};
-
-// --- 背景组件 ---
-const ParticleBackground = ({ theme }) => {
-  const canvasRef = useRef(null);
-  const mouseRef = useRef({ x: -1000, y: -1000 });
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationFrameId;
-    let particles = [];
-
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      initParticles();
-    };
-
-    const initParticles = () => {
-      particles = [];
-      const numParticles = Math.floor((canvas.width * canvas.height) / 7000);
-      for (let i = 0; i < numParticles; i++) {
-        particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          size: Math.random() * 1.5 + 0.5,
-          baseAlpha: Math.random() * 0.3 + 0.1,
-          phase: Math.random() * Math.PI * 2,
-          vx: (Math.random() - 0.5) * 0.2,
-          vy: (Math.random() - 0.5) * 0.2,
-          originX: 0, originY: 0, currentX: 0, currentY: 0,
-        });
-        particles[i].originX = particles[i].x;
-        particles[i].originY = particles[i].y;
-        particles[i].currentX = particles[i].x;
-        particles[i].currentY = particles[i].y;
-      }
-    };
-
-    const draw = (time) => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      if (theme === 'dark') {
-        gradient.addColorStop(0, '#1c1b1a');
-        gradient.addColorStop(1, '#171615');
-      } else {
-        gradient.addColorStop(0, '#f2f0e9');
-        gradient.addColorStop(1, '#ebe8e0');
-      }
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const t = time * 0.001;
-      const maxDist = 200;
-      const connectDist = 120;
-      const damping = 0.05;
-
-      particles.forEach(p => {
-        p.originX += p.vx;
-        p.originY += p.vy;
-
-        if (p.originX < 0) { p.originX = canvas.width; p.currentX = canvas.width; }
-        if (p.originX > canvas.width) { p.originX = 0; p.currentX = 0; }
-        if (p.originY < 0) { p.originY = canvas.height; p.currentY = canvas.height; }
-        if (p.originY > canvas.height) { p.originY = 0; p.currentY = 0; }
-
-        const dx = mouseRef.current.x - p.originX;
-        const dy = mouseRef.current.y - p.originY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        let targetX = p.originX;
-        let targetY = p.originY;
-        let scale = 1;
-        let alphaBoost = 0;
-
-        if (dist < maxDist) {
-          const force = Math.pow((maxDist - dist) / maxDist, 2);
-          const angle = Math.atan2(dy, dx);
-          const pushDistance = 150 * force;
-          targetX -= Math.cos(angle) * pushDistance;
-          targetY -= Math.sin(angle) * pushDistance;
-          scale = 1 + force * 2;
-          alphaBoost = force * 0.5;
-        }
-
-        p.currentX += (targetX - p.currentX) * damping;
-        p.currentY += (targetY - p.currentY) * damping;
-
-        const visualAlpha = Math.min(0.6, p.baseAlpha + Math.sin(t * 1.5 + p.phase) * 0.1 + alphaBoost);
-        const visualSize = p.size * scale;
-
-        p.renderX = p.currentX;
-        p.renderY = p.currentY;
-        p.renderAlpha = visualAlpha;
-        p.renderSize = visualSize;
-      });
-
-      ctx.lineWidth = 0.5;
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].renderX - particles[j].renderX;
-          const dy = particles[i].renderY - particles[j].renderY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < connectDist) {
-            const alpha = (1 - dist / connectDist) * 0.15;
-            ctx.strokeStyle = theme === 'dark'
-              ? `rgba(235, 232, 224, ${alpha})`
-              : `rgba(74, 70, 60, ${alpha})`;
-            ctx.beginPath();
-            ctx.moveTo(particles[i].renderX, particles[i].renderY);
-            ctx.lineTo(particles[j].renderX, particles[j].renderY);
-            ctx.stroke();
-          }
-        }
-      }
-
-      particles.forEach(p => {
-        const color = theme === 'dark' ? '235, 232, 224' : '74, 70, 60';
-        ctx.fillStyle = `rgba(${color}, ${p.renderAlpha})`;
-        ctx.beginPath();
-        ctx.arc(p.renderX, p.renderY, p.renderSize, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      animationFrameId = requestAnimationFrame(draw);
-    };
-
-    const handleMouseMove = (e) => {
-      mouseRef.current = { x: e.clientX, y: e.clientY };
-    };
-    const handleTouchMove = (e) => {
-      if (e.touches[0]) mouseRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    };
-
-    window.addEventListener('resize', resize);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('touchmove', handleTouchMove);
-    resize();
-    draw(0);
-
-    return () => {
-      window.removeEventListener('resize', resize);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('touchmove', handleTouchMove);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [theme]);
-
-  return <canvas ref={canvasRef} className="fixed inset-0 z-0 pointer-events-none" />;
-};
+import { MessageSquare, Heart, Share2, Send, Sparkles, Plus, X, ChevronDown, Quote, Star, Moon, Sun, Check, Search } from 'lucide-react';
+import MelonClockIcon from './components/MelonClockIcon';
+import Toast from './components/Toast';
+import ParticleBackground from './components/ParticleBackground';
+import useTypewriter from './hooks/useTypewriter';
 
 // --- 主应用组件 ---
 const InfiniteMelon = () => {
@@ -261,6 +25,8 @@ const InfiniteMelon = () => {
   const [stories, setStories] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCommentOpen, setIsCommentOpen] = useState(false);
   const [newContent, setNewContent] = useState("");
   const [newComment, setNewComment] = useState("");
@@ -274,36 +40,46 @@ const InfiniteMelon = () => {
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
 
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
   const currentStory = stories[currentIndex];
   // 如果没有故事，displayedText为空
   const { displayedText: displayedAiSummary, isTyping } = useTypewriter(currentStory?.aiSummary || "", 30, 500);
 
   // 初始化加载数据
   useEffect(() => {
-    fetchStories();
+    fetchStories(1);
   }, []);
 
-  const fetchStories = async () => {
-    setIsInitialLoading(true);
+  const fetchStories = async (pageNum = 1) => {
+    if (pageNum === 1) setIsInitialLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('stories')
-        .select('*, comments(*)')
-        .order('created_at', { ascending: false });
+      const response = await fetch(`http://localhost:3000/api/stories?page=${pageNum}&limit=10`);
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
 
-      if (error) throw error;
+      if (data.length < 10) setHasMore(false);
 
-      // 为每个story添加isLiked本地状态（如果是刚刷新，默认false，实际项目可能需要持久化）
+      // processedStories will be data directly, or mapped if needed.
+      // server.js returns: [ { ...story, comments: [] } ]
+      // We just need to add local UI state like isLiked.
       const processedStories = data.map(story => ({
         ...story,
         isLiked: false,
         // 格式化日期：这里简单处理，实际可使用 date-fns
         date: new Date(story.created_at).toLocaleString()
       }));
-      setStories(processedStories);
+
+      if (pageNum === 1) {
+        setStories(processedStories);
+      } else {
+        setStories(prev => [...prev, ...processedStories]);
+      }
+      setPage(pageNum);
     } catch (error) {
       console.error("Error fetching stories:", error);
-      showToast("加载失败，请刷新重试");
+      showToast("加载失败，请确保 server.js 已启动 (npm start)");
     } finally {
       setIsInitialLoading(false);
     }
@@ -323,9 +99,15 @@ const InfiniteMelon = () => {
     setIsCommentOpen(false);
 
     setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1) % stories.length);
+      const nextIndex = (currentIndex + 1) % stories.length;
+      setCurrentIndex(nextIndex);
       setCardAnimation("animate-card-enter-right");
       setIsTransitioning(false);
+
+      // 如果快到底部且还有更多数据，预加载下一页
+      if (hasMore && nextIndex >= stories.length - 2) {
+        fetchStories(page + 1);
+      }
     }, 500);
   };
 
@@ -380,12 +162,13 @@ const InfiniteMelon = () => {
 
     // 提交到数据库
     try {
-      const { error } = await supabase
-        .from('stories')
-        .update({ likes: newLikes })
-        .eq('id', storyId);
+      const response = await fetch(`http://localhost:3000/api/stories/${storyId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ likes: newLikes })
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to update likes");
     } catch (error) {
       console.error("Error updating likes:", error);
       // 回滚（可选，这里暂不做复杂回滚）
@@ -444,21 +227,22 @@ const InfiniteMelon = () => {
     setNewComment("");
 
     try {
-      const { data, error } = await supabase
-        .from('comments')
-        .insert([
-          {
-            story_id: currentStory.id,
-            user: "匿名用户",
-            text: commentText
-          }
-        ])
-        .select();
+      const response = await fetch('http://localhost:3000/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          story_id: currentStory.id,
+          user: "匿名用户",
+          text: commentText
+        })
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error("Failed to post comment");
+
+      const data = await response.json();
 
       // 更新ID为真实ID
-      const realComment = data[0];
+      const realComment = data;
       setStories(prev => {
         const nextStories = [...prev];
         const sIdx = nextStories.findIndex(s => s.id === currentStory.id);
@@ -486,6 +270,65 @@ const InfiniteMelon = () => {
     }
   };
 
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    const targetId = parseInt(searchQuery);
+    if (isNaN(targetId)) {
+      showToast("请输入有效的数字编号");
+      return;
+    }
+
+    const index = stories.findIndex(s => s.displayId === targetId);
+    if (index !== -1) {
+      setCurrentIndex(index);
+      setIsSearchOpen(false);
+      setSearchQuery("");
+      showToast(`已跳转到编号 ${targetId}`);
+    } else {
+      showToast(`未找到编号为 ${targetId} 的瓜`);
+    }
+  };
+
+  // 实时评论轮询逻辑 (Real-time polling)
+  useEffect(() => {
+    let intervalId;
+    if (isCommentOpen && currentStory) {
+      // 立即抓取一次
+      fetchComments(currentStory.id);
+
+      // 每3秒轮询一次
+      intervalId = setInterval(() => {
+        fetchComments(currentStory.id);
+      }, 3000);
+    }
+    return () => clearInterval(intervalId);
+  }, [isCommentOpen, currentStory?.id]); // 监听 ID 变化，切瓜时也会重新开始轮询
+
+  const fetchComments = async (storyId) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/comments?story_id=${storyId}`);
+      if (!response.ok) return;
+
+      const latestComments = await response.json();
+
+      // 更新 stories 状态中的评论数据
+      setStories(prevStories => {
+        const newStories = [...prevStories];
+        const index = newStories.findIndex(s => s.id === storyId);
+        if (index !== -1) {
+          // 仅当评论数量或内容不同的时候才更新，避免 React 过度渲染（虽 React Virtual DOM 会 diff）
+          // 这里为了简单，直接覆盖，因为引用变了 React 就会渲染
+          newStories[index] = { ...newStories[index], comments: latestComments };
+        }
+        return newStories;
+      });
+    } catch (err) {
+      console.error("Polling comments failed", err);
+    }
+  };
+
   const handlePostSubmit = async () => {
     if (!newContent.trim()) return;
     setIsPosting(true);
@@ -495,21 +338,22 @@ const InfiniteMelon = () => {
 
     // AI 生成逻辑，带重试
     const fetchAiSummary = async (text, retries = 3) => {
-      const apiKey = "sk-EaIEkoMJooD2u40rZM3BJdmZyusfeaHCuHJAXedjBGL3QsmK";
+      // const apiKey = "sk-EaIEkoMJooD2u40rZM3BJdmZyusfeaHCuHJAXedjBGL3QsmK"; // REMOVED SECURITY RISK
       const prompt = "扮演一个毒舌故事总结家，喜欢用30字以内的精炼中文语句总结锐评故事";
 
       for (let i = 0; i < retries; i++) {
         try {
           // Use local proxy /api/ai which maps to -> https://kfc-api.sxxe.net/v1/chat/completions
-          const response = await fetch("/api/ai", {
+          // Add timestamp to prevent browser caching of POST request
+          const response = await fetch(`http://localhost:3000/api/ai?t=${Date.now()}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${apiKey}`,
-              // User-Agent is handled by Vite proxy
+              // "Authorization": `Bearer ${apiKey}`, // REMOVED (backend handles this)
             },
             body: JSON.stringify({
               model: "gpt-4o-mini",
+              temperature: 1.0, // Ensure variety
               messages: [
                 { role: "system", content: prompt },
                 { role: "user", content: text }
@@ -548,26 +392,26 @@ const InfiniteMelon = () => {
         finalSummary = content.substring(0, 30) + "...(AI罢工了)";
       }
 
-      console.log("Inserting into Supabase:", { content, aiSummary: finalSummary });
+      console.log("Inserting into Database:", { content, aiSummary: finalSummary });
 
       // 插入数据库
-      const { data, error } = await supabase
-        .from('stories')
-        .insert([{
+      const response = await fetch('http://localhost:3000/api/stories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           content: content,
-          aiSummary: finalSummary,
-          likes: 0
-        }])
-        .select();
+          aiSummary: finalSummary
+        })
+      });
 
-      if (error) {
-        console.error("Supabase Insert Error:", error);
-        throw error;
+      if (!response.ok) {
+        throw new Error("Server Insert Error");
       }
 
-      console.log("Supabase Insert Success:", data);
+      const data = await response.json();
+      console.log("Server Insert Success:", data);
 
-      const newStory = data[0];
+      const newStory = data;
       // 补充本地字段以匹配组件格式
       newStory.isLiked = false;
       newStory.comments = [];
@@ -581,10 +425,7 @@ const InfiniteMelon = () => {
 
     } catch (error) {
       console.error("Post processing failed:", error);
-      // 如果是上面的 supabase error 已经被处理了，这里的 catch 主要是捕获其他异常
-      if (!error.message?.includes("Supabase Insert Error")) {
-        showToast(`发布失败: ${error.message}`);
-      }
+      showToast(`发布失败: ${error.message}`);
     } finally {
       setIsPosting(false);
     }
@@ -674,7 +515,7 @@ const InfiniteMelon = () => {
             </div>
             <div className="flex flex-col">
               <h1 className={`text-sm font-bold tracking-[0.2em] uppercase ${colors.text} transition-colors duration-500`}>即刻瓜田</h1>
-              <span className={`text-[9px] tracking-wider ${colors.card.textSecondary} opacity-60`}>INSTANT MELON FIELD</span>
+              <span className={`text-[9px] tracking-wider ${colors.card.textSecondary} opacity-60`}>INSTANT MELON</span>
             </div>
           </div>
 
@@ -754,7 +595,7 @@ const InfiniteMelon = () => {
           </div>
           <div className="flex flex-col">
             <h1 className={`text-sm font-bold tracking-[0.2em] uppercase ${colors.text} transition-colors duration-500`}>即刻瓜田</h1>
-            <span className={`text-[9px] tracking-wider ${colors.card.textSecondary} opacity-60`}>INSTANT MELON FIELD</span>
+            <span className={`text-[9px] tracking-wider ${colors.card.textSecondary} opacity-60`}>INSTANT MELON</span>
           </div>
         </div>
 
@@ -765,6 +606,14 @@ const InfiniteMelon = () => {
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+
+          <button
+            onClick={() => setIsSearchOpen(true)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center border backdrop-blur-md transition-all duration-300 active:scale-95 shadow-sm hover:shadow-md ${isDark ? 'bg-[#262524]/60 border-white/5 text-white/60 hover:text-white' : 'bg-[#ffffff]/60 border-[#3e3c38]/5 text-[#3e3c38]/60 hover:text-[#3e3c38]'}`}
+          >
+            <Search size={18} />
+          </button>
+
           <button
             onClick={() => setIsModalOpen(true)}
             className={`px-5 py-2.5 rounded-full border backdrop-blur-md transition-all duration-300 active:scale-95 shadow-sm hover:shadow-md group flex items-center gap-2 ${isDark ? 'bg-[#262524]/60 border-white/5 hover:bg-[#262524]' : 'bg-[#ffffff]/60 border-[#3e3c38]/5 hover:bg-[#ffffff]'}`}
@@ -781,6 +630,39 @@ const InfiniteMelon = () => {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
+        {/* 搜索模态框 */}
+        {isSearchOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <div className={`absolute inset-0 ${colors.modal.overlay} backdrop-blur-lg`} onClick={() => setIsSearchOpen(false)}></div>
+            <div className={`${colors.modal.bg} border ${colors.modal.border} w-full max-w-sm shadow-2xl relative z-10 animate-in fade-in zoom-in duration-300 p-6 rounded-2xl`}>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className={`font-bold ${colors.card.textPrimary} tracking-widest text-sm`}>搜索瓜号</h3>
+                <button onClick={() => setIsSearchOpen(false)} className={`${colors.icon.default} hover:${colors.card.textPrimary} transition-colors`}>
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleSearch} className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === '-' || e.key === '.' || e.key === 'e') {
+                      e.preventDefault();
+                    }
+                  }}
+                  placeholder="输入编号 (如 1)"
+                  className={`flex-1 px-4 py-2.5 rounded-xl bg-transparent border ${colors.modal.border} ${colors.modal.text} focus:outline-none focus:border-opacity-50 transition-colors`}
+                  autoFocus
+                />
+                <button type="submit" className={`${colors.modal.btnBg} ${colors.modal.btnText} px-4 rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all`}>
+                  <Search size={18} />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
         <div className={`w-full relative preserve-3d transition-all duration-500 ease-out ${cardAnimation}`}>
           <div className={`${colors.card.bg} backdrop-blur-xl border ${colors.card.border} ${colors.card.shadow} rounded-[2rem] p-8 md:p-10 relative flex flex-col min-h-[500px] overflow-hidden transition-colors duration-500`}>
 
@@ -790,7 +672,7 @@ const InfiniteMelon = () => {
               <div className="flex flex-col gap-1.5">
                 <span className={`text-[10px] ${colors.card.textSecondary} font-bold tracking-[0.2em] uppercase flex items-center gap-2`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-[#aab396]' : 'bg-[#656d4a]'} shadow-sm`}></span>
-                  编号 {currentStory.id.toString().slice(-4).padStart(4, '0')}
+                  编号 {(currentStory.displayId || 0).toString().padStart(4, '0')}
                 </span>
                 <span className={`text-xs font-serif italic ${colors.card.textSecondary} opacity-80`}>匿名投稿</span>
               </div>
@@ -867,7 +749,7 @@ const InfiniteMelon = () => {
         </div>
       </main>
 
-      <div className="fixed bottom-12 left-0 w-full flex justify-center px-6 z-20 pointer-events-none">
+      <div className={`fixed bottom-12 left-0 w-full flex justify-center px-6 z-20 pointer-events-none transition-all duration-300 ${isSearchOpen || isModalOpen ? 'blur-md opacity-20' : ''}`}>
         <button
           onClick={handleNext}
           disabled={isLoading || stories.length === 0}
