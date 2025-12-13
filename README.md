@@ -8,6 +8,8 @@
 数据存储采用本地 JSON 文件，无需外部数据库，部署极其简单。
 ![Uploading 20251214012257_rec_.gif…]()
 >>>>>>> e68428364317ec5eea4b867877011ab4f9db3ed7
+<img width="256" height="256" alt="暖框瓜" src="https://github.com/user-attachments/assets/f04228dc-5e52-4466-93cc-db732996d2a1" />
+<img width="256" height="256" alt="暗色瓜" src="https://github.com/user-attachments/assets/e9fc1b8f-142c-4b2e-88b5-731a49183b76" />
 
 ![Instant Melon UI](https://via.placeholder.com/800x400?text=Instant+Melon+Preview)
 
