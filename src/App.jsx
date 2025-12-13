@@ -395,7 +395,7 @@ const InfiniteMelon = () => {
       console.log("Inserting into Database:", { content, aiSummary: finalSummary });
 
       // 插入数据库
-      const response = await fetch('http://localhost:3000/api/stories', {
+      const response = await fetch('/api/stories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
