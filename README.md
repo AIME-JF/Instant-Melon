@@ -1,7 +1,13 @@
 # 🍉 Instant Melon (即刻瓜田)
 
+<<<<<<< HEAD
 **一个基于 React + Express + PostgreSQL 的现代化匿名投稿与吃瓜平台。**
 支持 AI 毒舌总结、实时评论互动、无限流加载，均已容器化，一键部署。
+=======
+一个基于 React + Vite + Express 的轻量级匿名投稿与吃瓜平台。
+数据存储采用本地 JSON 文件，无需外部数据库，部署极其简单。
+![Uploading 20251214012257_rec_.gif…]()
+>>>>>>> e68428364317ec5eea4b867877011ab4f9db3ed7
 
 ![Instant Melon UI](https://via.placeholder.com/800x400?text=Instant+Melon+Preview)
 
