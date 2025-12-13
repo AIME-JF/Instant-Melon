@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { MessageSquare, Heart, Share2, Send, Sparkles, Plus, X, ChevronDown, Quote, Star, Moon, Sun, Check } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 // --- 新版图标：西瓜时钟 (Melon Clock) ---
 const MelonClockIcon = ({ size = 24, className = "", isSpinning = false }) => (
@@ -285,9 +286,12 @@ const InfiniteMelon = () => {
   const fetchStories = async () => {
     setIsInitialLoading(true);
     try {
-      const response = await fetch('/api/stories');
-      if (!response.ok) throw new Error('Failed to fetch stories');
-      const data = await response.json();
+      const { data, error } = await supabase
+        .from('stories')
+        .select('*, comments(*)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
 
       // 为每个story添加isLiked本地状态（如果是刚刷新，默认false，实际项目可能需要持久化）
       const processedStories = data.map(story => ({
@@ -374,17 +378,14 @@ const InfiniteMelon = () => {
       setTimeout(() => setLikeAnimation(false), 800);
     }
 
-    // 提交到服务器
+    // 提交到数据库
     try {
-      const response = await fetch(`/api/stories/${storyId}/like`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ likes: newLikes }),
-      });
+      const { error } = await supabase
+        .from('stories')
+        .update({ likes: newLikes })
+        .eq('id', storyId);
 
-      if (!response.ok) throw new Error('Failed to update likes');
+      if (error) throw error;
     } catch (error) {
       console.error("Error updating likes:", error);
       // 回滚（可选，这里暂不做复杂回滚）
@@ -443,23 +444,21 @@ const InfiniteMelon = () => {
     setNewComment("");
 
     try {
-      const response = await fetch('/api/comments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          story_id: currentStory.id,
-          user: "匿名用户",
-          text: commentText
-        }),
-      });
+      const { data, error } = await supabase
+        .from('comments')
+        .insert([
+          {
+            story_id: currentStory.id,
+            user: "匿名用户",
+            text: commentText
+          }
+        ])
+        .select();
 
-      if (!response.ok) throw new Error('Failed to post comment');
-
-      const realComment = await response.json();
+      if (error) throw error;
 
       // 更新ID为真实ID
+      const realComment = data[0];
       setStories(prev => {
         const nextStories = [...prev];
         const sIdx = nextStories.findIndex(s => s.id === currentStory.id);
@@ -511,10 +510,9 @@ const InfiniteMelon = () => {
             },
             body: JSON.stringify({
               model: "gpt-4o-mini",
-              temperature: 0.8, // 增加多样性
               messages: [
                 { role: "system", content: prompt },
-                { role: "user", content: `${text}\n\n(Request ID: ${Date.now()})` } // 添加随机 ID 防止缓存
+                { role: "user", content: text }
               ]
             })
           });
@@ -550,35 +548,30 @@ const InfiniteMelon = () => {
         finalSummary = content.substring(0, 30) + "...(AI罢工了)";
       }
 
-      console.log("Inserting into Server:", { content, aiSummary: finalSummary });
+      console.log("Inserting into Supabase:", { content, aiSummary: finalSummary });
 
-      // 插入服务器
-      const response = await fetch('/api/stories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // 插入数据库
+      const { data, error } = await supabase
+        .from('stories')
+        .insert([{
           content: content,
           aiSummary: finalSummary,
-        }),
-      });
+          likes: 0
+        }])
+        .select();
 
-      if (!response.ok) {
-        throw new Error('Failed to post story');
+      if (error) {
+        console.error("Supabase Insert Error:", error);
+        throw error;
       }
 
-      const newStory = await response.json();
-      console.log("Server Insert Success:", newStory);
+      console.log("Supabase Insert Success:", data);
 
+      const newStory = data[0];
       // 补充本地字段以匹配组件格式
       newStory.isLiked = false;
       newStory.comments = [];
       newStory.date = "刚刚";
-      // 临时计算一个 displayId，实际刷新后会由后端重新分配
-      // 获取当前最大 displayId + 1，如果列表为空则为 1
-      const maxDisplayId = stories.length > 0 ? Math.max(...stories.map(s => s.displayId || 0)) : 0;
-      newStory.displayId = maxDisplayId + 1;
 
       setStories([newStory, ...stories]);
       setCurrentIndex(0);
@@ -588,7 +581,10 @@ const InfiniteMelon = () => {
 
     } catch (error) {
       console.error("Post processing failed:", error);
-      showToast(`发布失败: ${error.message}`);
+      // 如果是上面的 supabase error 已经被处理了，这里的 catch 主要是捕获其他异常
+      if (!error.message?.includes("Supabase Insert Error")) {
+        showToast(`发布失败: ${error.message}`);
+      }
     } finally {
       setIsPosting(false);
     }
@@ -794,7 +790,7 @@ const InfiniteMelon = () => {
               <div className="flex flex-col gap-1.5">
                 <span className={`text-[10px] ${colors.card.textSecondary} font-bold tracking-[0.2em] uppercase flex items-center gap-2`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-[#aab396]' : 'bg-[#656d4a]'} shadow-sm`}></span>
-                  编号 {(currentStory.displayId || 0).toString().padStart(3, '0')}
+                  编号 {currentStory.id.toString().slice(-4).padStart(4, '0')}
                 </span>
                 <span className={`text-xs font-serif italic ${colors.card.textSecondary} opacity-80`}>匿名投稿</span>
               </div>
