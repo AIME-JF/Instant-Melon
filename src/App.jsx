@@ -55,7 +55,7 @@ const InfiniteMelon = () => {
   const fetchStories = async (pageNum = 1) => {
     if (pageNum === 1) setIsInitialLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/stories?page=${pageNum}&limit=10`);
+      const response = await fetch(`/api/stories?page=${pageNum}&limit=10`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
 
@@ -162,7 +162,7 @@ const InfiniteMelon = () => {
 
     // 提交到数据库
     try {
-      const response = await fetch(`http://localhost:3000/api/stories/${storyId}/like`, {
+      const response = await fetch(`/api/stories/${storyId}/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ likes: newLikes })
@@ -227,7 +227,7 @@ const InfiniteMelon = () => {
     setNewComment("");
 
     try {
-      const response = await fetch('http://localhost:3000/api/comments', {
+      const response = await fetch('/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -308,7 +308,7 @@ const InfiniteMelon = () => {
 
   const fetchComments = async (storyId) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/comments?story_id=${storyId}`);
+      const response = await fetch(`/api/comments?story_id=${storyId}`);
       if (!response.ok) return;
 
       const latestComments = await response.json();
@@ -345,7 +345,7 @@ const InfiniteMelon = () => {
         try {
           // Use local proxy /api/ai which maps to -> https://kfc-api.sxxe.net/v1/chat/completions
           // Add timestamp to prevent browser caching of POST request
-          const response = await fetch(`http://localhost:3000/api/ai?t=${Date.now()}`, {
+          const response = await fetch(`/api/ai?t=${Date.now()}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
