@@ -165,6 +165,12 @@ app.post('/api/ai', async (req, res) => {
         });
 
         const data = await response.json();
+        console.log("AI Proxy Response Status:", response.status);
+        if (!response.ok) {
+            console.error("AI Proxy Error Body:", JSON.stringify(data));
+        } else {
+            console.log("AI Proxy Success Body Preview:", JSON.stringify(data).substring(0, 200));
+        }
         res.status(response.status).json(data);
     } catch (err) {
         res.status(500).json({ error: "AI Service Proxy Failed: " + err.message });
