@@ -12,9 +12,13 @@ const InfiniteMelon = () => {
   // Toast 状态
   const [toastMessage, setToastMessage] = useState("");
   const [isToastVisible, setIsToastVisible] = useState(false);
+  const [toastActionLabel, setToastActionLabel] = useState(null);
+  const [onToastAction, setOnToastAction] = useState(null);
 
-  const showToast = (msg) => {
+  const showToast = (msg, actionLabel = null, onAction = null) => {
     setToastMessage(msg);
+    setToastActionLabel(actionLabel);
+    setOnToastAction(() => onAction);
     setIsToastVisible(true);
   };
 
@@ -85,27 +89,144 @@ const InfiniteMelon = () => {
     }
   };
 
+  // 轮询新瓜逻辑
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkForNewStories();
+    }, 5000); // 每5秒检查一次
+    return () => clearInterval(interval);
+  }, [stories]); // 依赖 stories 以获取最新 ID
+
+  // Create refs to access fresh state in async functions
+  const storiesRef = useRef(stories);
+  const currentIndexRef = useRef(currentIndex);
+
+  useLayoutEffect(() => {
+    storiesRef.current = stories;
+  }, [stories]);
+
+  useLayoutEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  const checkForNewStories = async () => {
+    if (stories.length === 0) return [];
+
+    // 获取当前最新的 ID (数组第一个是最新的)
+    const latestId = stories[0].id;
+
+    try {
+      const response = await fetch(`/api/stories?since_id=${latestId}`);
+      if (!response.ok) return [];
+
+      const newData = await response.json();
+      if (newData && newData.length > 0) {
+        const processedNewStories = newData.map(story => ({
+          ...story,
+          isLiked: false,
+          isNew: true, // Mark as new for navigation logic
+          date: new Date(story.created_at).toLocaleString()
+        }));
+
+        setStories(prev => {
+          // 避免重复添加 (双重保险)
+          const existingIds = new Set(prev.map(s => s.id));
+          const uniqueNewStories = processedNewStories.filter(s => !existingIds.has(s.id));
+
+          if (uniqueNewStories.length === 0) return prev;
+
+          return [...uniqueNewStories, ...prev];
+        });
+
+        // 保持用户当前的阅读位置
+        // 如果我们在前面插入了 N 个新瓜，原来的瓜 index 就会增加 N
+        setCurrentIndex(prevIndex => prevIndex + processedNewStories.length);
+
+        // 获取最新瓜的显示ID (通常是第一个)
+        const newestStory = processedNewStories[0];
+
+        showToast(
+          `新瓜发布 #${newestStory.displayId}`,
+          "立即查看",
+          () => {
+            setCurrentIndex(0);
+            setCardAnimation("animate-card-enter-right"); //添加个动画效果
+          }
+        );
+        return processedNewStories;
+      }
+      return [];
+    } catch (err) {
+      console.error("Polling error:", err);
+      return [];
+    }
+  };
+
   useEffect(() => {
     if (isLoading && !isTransitioning && !isTyping) {
       setIsLoading(false);
     }
   }, [isTyping, isTransitioning, isLoading]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (isLoading || stories.length === 0) return;
     setIsLoading(true);
+
+    // 每次点击“下一个”时，顺便在后台检查是否有新瓜
+    // 并等待结果
+    const newStories = await checkForNewStories();
+    const newCount = newStories.length;
+
+    // Capture state immediately before async gaps might shift things
+    // Note: storiesRef.current will be STALE relative to the update triggered by checkForNewStories
+    // But it perfectly represents the "Before Update" state which we need to calculate the shift
+    const currentStoriesStale = storiesRef.current;
+    const currentIndexStale = currentIndexRef.current;
+
+    // Construct the "Future" state that effectively exists (or will exist) after the merge
+    // This allows us to make decisions about where to go relative to the new structure
+    const futureStories = [...newStories, ...currentStoriesStale];
+    const futureCurrentIndex = currentIndexStale + newCount;
+
+    // Decision Logic:
+    // Check if the story immediately ABOVE us (Newer) is marked as "New"
+    const prevStory = futureStories[futureCurrentIndex - 1];
+
+    let nextIndex;
+    let shouldMarkAsRead = false;
+
+    if (prevStory && prevStory.isNew) {
+      // Catch Up Mode: Go Up (Newer)
+      nextIndex = futureCurrentIndex - 1;
+      shouldMarkAsRead = true;
+    } else {
+      // Standard Mode: Go Down (Older)
+      nextIndex = (futureCurrentIndex + 1) % futureStories.length;
+    }
+
     setIsTransitioning(true);
     setCardAnimation("animate-card-exit-left");
     setIsCommentOpen(false);
 
     setTimeout(() => {
-      const nextIndex = (currentIndex + 1) % stories.length;
       setCurrentIndex(nextIndex);
+
+      // If we visited a "New" story, mark it as read so we don't force-loop back to it
+      if (shouldMarkAsRead) {
+        setStories(current => {
+          const clone = [...current];
+          if (clone[nextIndex]) { // Safety check
+            clone[nextIndex] = { ...clone[nextIndex], isNew: false };
+          }
+          return clone;
+        });
+      }
+
       setCardAnimation("animate-card-enter-right");
       setIsTransitioning(false);
 
       // 如果快到底部且还有更多数据，预加载下一页
-      if (hasMore && nextIndex >= stories.length - 2) {
+      if (hasMore && nextIndex >= futureStories.length - 2) {
         fetchStories(page + 1);
       }
     }, 500);
@@ -367,7 +488,8 @@ const InfiniteMelon = () => {
           const summary = data.choices[0]?.message?.content?.trim();
 
           // 校验逻辑：非空，且不等于原内容（部分失败模型会复读），且不包含错误关键词
-          if (summary && summary !== text && summary.length > 2) {
+          // 特别过滤掉 AI 服务偶尔返回的硬编码/缓存回复 "前男友再现..."
+          if (summary && summary !== text && summary.length > 2 && !summary.includes("前男友再现")) {
             return summary;
           }
           console.warn(`Attempt ${i + 1}: Invalid summary generated:`, summary);
@@ -586,7 +708,14 @@ const InfiniteMelon = () => {
       <ParticleBackground theme={theme} />
 
       {/* Toast 通知容器 */}
-      <Toast message={toastMessage} isVisible={isToastVisible} onClose={() => setIsToastVisible(false)} theme={theme} />
+      <Toast
+        message={toastMessage}
+        isVisible={isToastVisible}
+        onClose={() => setIsToastVisible(false)}
+        theme={theme}
+        actionLabel={toastActionLabel}
+        onAction={onToastAction}
+      />
 
       <header className={`fixed top-0 w-full z-20 px-6 py-6 flex justify-between items-center pointer-events-none transition-colors duration-500`}>
         <div className="flex items-center gap-4 pointer-events-auto group">

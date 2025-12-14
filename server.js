@@ -35,6 +35,35 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // 1. Get Stories
 app.get('/api/stories', async (req, res) => {
     try {
+        const since_id = req.query.since_id;
+
+        // If since_id is provided, fetch only newer stories (Polling mode)
+        if (since_id) {
+            const result = await pool.query(`
+                SELECT s.*, 
+                COALESCE(
+                    (
+                        SELECT json_agg(c ORDER BY c.created_at DESC)
+                        FROM comments c
+                        WHERE c.story_id = s.id
+                    ), 
+                    '[]'
+                ) AS comments
+                FROM stories s
+                WHERE s.id > $1
+                ORDER BY s.id DESC
+            `, [since_id]);
+
+            const stories = result.rows.map(story => ({
+                ...story,
+                displayId: story.id,
+                aiSummary: story.ai_summary
+            }));
+
+            return res.json(stories);
+        }
+
+        // Standard Pagination mode
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
@@ -153,6 +182,9 @@ const OPENAI_API_KEY = "sk-EaIEkoMJooD2u40rZM3BJdmZyusfeaHCuHJAXedjBGL3QsmK"; //
 // 5. AI Proxy 
 app.post('/api/ai', async (req, res) => {
     try {
+        console.log("------------------------------------------");
+        console.log("[AI Proxy] Incoming Request Body:", JSON.stringify(req.body, null, 2));
+
         const response = await fetch("https://kfc-api.sxxe.net/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -165,14 +197,16 @@ app.post('/api/ai', async (req, res) => {
         });
 
         const data = await response.json();
-        console.log("AI Proxy Response Status:", response.status);
+        console.log("[AI Proxy] Upstream Status:", response.status);
+        console.log("[AI Proxy] Upstream Response Body:", JSON.stringify(data, null, 2));
+        console.log("------------------------------------------");
+
         if (!response.ok) {
             console.error("AI Proxy Error Body:", JSON.stringify(data));
-        } else {
-            console.log("AI Proxy Success Body Preview:", JSON.stringify(data).substring(0, 200));
         }
         res.status(response.status).json(data);
     } catch (err) {
+        console.error("[AI Proxy] Exception:", err);
         res.status(500).json({ error: "AI Service Proxy Failed: " + err.message });
     }
 });
