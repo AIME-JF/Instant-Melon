@@ -83,10 +83,23 @@ docker compose up --build -d
 docker compose exec db psql -U admin -d instant_melon -c "TRUNCATE TABLE stories, comments RESTART IDENTITY CASCADE;"
 ```
 
-## 🔒 安全说明
-- **API Key 配置**：复制 `.env.example` 为 `.env`，填入你的 OpenAI API Key。
-- 数据库密码在 `docker-compose.yml` 中配置 (生产环境建议修改)。
-- 前端通过后端代理访问 AI，密钥不会暴露给浏览器。
+## 🔒 安全与配置
+
+1. 复制 `.env.example` 为 `.env`：
+   ```bash
+   cp .env.example .env
+   ```
+
+2. 编辑 `.env` 填入你的配置：
+   ```env
+   # AI API 配置
+   OPENAI_API_KEY=sk-your-api-key-here
+   OPENAI_API_BASE=https://api.openai.com/v1/chat/completions
+   OPENAI_MODEL=gpt-4o-mini
+   ```
+
+3. 数据库密码在 `docker-compose.yml` 中配置（生产环境建议修改）。
+4. 前端通过后端代理访问 AI，密钥不会暴露给浏览器。
 
 ---
 *Built with ❤️ by Instant Melon Team*

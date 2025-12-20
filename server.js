@@ -250,7 +250,7 @@ app.post('/api/ai', async (req, res) => {
         console.log("[AI Proxy] Upstream Status:", response.status);
         console.log("[AI Proxy] Upstream Response Body:", JSON.stringify(data, null, 2));
 
-        // 检测并过滤已知的缓存/错误回复
+        // 检测已知的缓存/错误回复，添加标记但不阻断
         if (data.choices && data.choices[0]?.message?.content) {
             const content = data.choices[0].message.content;
             const KNOWN_CACHED_RESPONSES = [
@@ -262,11 +262,9 @@ app.post('/api/ai', async (req, res) => {
 
             const isCached = KNOWN_CACHED_RESPONSES.some(phrase => content.includes(phrase));
             if (isCached) {
-                console.warn("[AI Proxy] Detected cached/repeated response, returning error to trigger retry");
-                return res.status(503).json({
-                    error: "AI returned cached response, please retry",
-                    cached: true
-                });
+                console.warn("[AI Proxy] Detected cached/repeated response, marking as cached");
+                // 不阻断，只标记
+                data._cached = true;
             }
         }
 

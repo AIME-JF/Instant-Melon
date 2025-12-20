@@ -458,7 +458,7 @@ const InfiniteMelon = () => {
     let finalSummary = "AI 生成失败";
 
     // AI 生成逻辑，带重试
-    const fetchAiSummary = async (text, retries = 5) => {
+    const fetchAiSummary = async (text, retries = 3) => {
       // const apiKey = "sk-EaIEkoMJooD2u40rZM3BJdmZyusfeaHCuHJAXedjBGL3QsmK"; // REMOVED SECURITY RISK
       const prompt = "扮演一个毒舌故事总结家，喜欢用30字以内的精炼中文语句总结锐评故事";
 
@@ -483,21 +483,27 @@ const InfiniteMelon = () => {
             })
           });
 
-          // 503 表示后端检测到缓存回复，需要重试
-          if (response.status === 503) {
-            console.warn(`Attempt ${i + 1}: Backend detected cached response, retrying...`);
-            await new Promise(res => setTimeout(res, 800 + i * 200)); // 递增延迟
+          if (!response.ok) {
+            console.warn(`Attempt ${i + 1}: API returned ${response.status}`);
+            await new Promise(res => setTimeout(res, 500));
             continue;
           }
 
-          if (!response.ok) throw new Error("API call failed");
-
           const data = await response.json();
-          const summary = data.choices[0]?.message?.content?.trim();
+          const summary = data.choices?.[0]?.message?.content?.trim();
 
-          // 校验逻辑：非空，且不等于原内容（部分失败模型会复读），且不包含错误关键词
-          // 特别过滤掉 AI 服务偶尔返回的硬编码/缓存回复 "前男友再现..."
-          if (summary && summary !== text && summary.length > 2 && !summary.includes("前男友再现") && !summary.includes("五味杂陈")) {
+          // 检测后端标记的缓存响应
+          if (data._cached) {
+            console.warn(`Attempt ${i + 1}: Backend marked as cached, retrying...`);
+            await new Promise(res => setTimeout(res, 600));
+            continue;
+          }
+
+          // 校验：非空、不等于原文、不包含已知缓存关键词
+          const CACHED_KEYWORDS = ["前男友再现", "五味杂陈", "旧情复燃难"];
+          const isCached = CACHED_KEYWORDS.some(kw => summary?.includes(kw));
+
+          if (summary && summary !== text && summary.length > 2 && !isCached) {
             return summary;
           }
           console.warn(`Attempt ${i + 1}: Invalid summary generated:`, summary);
