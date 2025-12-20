@@ -3,6 +3,9 @@
 一个基于 React + Express + PostgreSQL 的现代化匿名投稿与吃瓜平台。
 支持 AI 毒舌总结、实时评论互动、无限流加载，均已容器化，一键部署。
 
+![20251220164848_rec_](https://github.com/user-attachments/assets/6051ff51-ba44-46d7-bc6a-e1dc9be66f08)
+![img_v3_02t5_c497af66-4ddf-4d64-a8f8-3ad54f73194g](https://github.com/user-attachments/assets/2f02c535-5632-48ef-8670-a1e0f4eb3c5f)
+![img_v3_02t5_db36e8d8-5f59-431d-b605-ce4820a0506g](https://github.com/user-attachments/assets/11a0cde4-06d9-4ea3-8e29-395dd2a86dca)
 
 <img width="256" height="256" alt="暖框瓜" src="https://github.com/user-attachments/assets/f04228dc-5e52-4466-93cc-db732996d2a1" />
 <img width="256" height="256" alt="暗色瓜" src="https://github.com/user-attachments/assets/e9fc1b8f-142c-4b2e-88b5-731a49183b76" />
