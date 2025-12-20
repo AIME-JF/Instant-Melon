@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Database data (auto-generated)
+postgres-data/
+
+# Environment variables (contains secrets)
+.env
+.env.local
+.env.*.local
+
+# Test/Debug files
+test_*.js
+verify_*.js

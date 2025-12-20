@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   db:
     image: postgres:15-alpine
@@ -28,6 +27,9 @@ services:
       - DB_USER=admin
       - DB_PASSWORD=password
       - DB_NAME=instant_melon
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE}
+      - OPENAI_MODEL=${OPENAI_MODEL}
     depends_on:
       db:
         condition: service_healthy

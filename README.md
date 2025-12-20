@@ -1,10 +1,7 @@
 # 🍉 Instant Melon (即刻瓜田)
 
-一个基于 React + Express + PostgreSQL 的现代化匿名投稿与吃瓜平台。**
+一个基于 React + Express + PostgreSQL 的现代化匿名投稿与吃瓜平台。
 支持 AI 毒舌总结、实时评论互动、无限流加载，均已容器化，一键部署。
-=======
-一个基于 React + Vite + Express 的轻量级匿名投稿与吃瓜平台。
-数据存储采用本地 JSON 文件，无需外部数据库，部署极其简单。
 
 
 <img width="256" height="256" alt="暖框瓜" src="https://github.com/user-attachments/assets/f04228dc-5e52-4466-93cc-db732996d2a1" />
@@ -87,8 +84,9 @@ docker compose exec db psql -U admin -d instant_melon -c "TRUNCATE TABLE stories
 ```
 
 ## 🔒 安全说明
-- OpenAI API Key 已移至后端 (`server.js`)，前端通过代理访问，密钥不泄露。
+- **API Key 配置**：复制 `.env.example` 为 `.env`，填入你的 OpenAI API Key。
 - 数据库密码在 `docker-compose.yml` 中配置 (生产环境建议修改)。
+- 前端通过后端代理访问 AI，密钥不会暴露给浏览器。
 
 ---
 *Built with ❤️ by Instant Melon Team*

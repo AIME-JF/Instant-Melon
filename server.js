@@ -177,7 +177,23 @@ app.post('/api/comments', async (req, res) => {
     }
 });
 
-const OPENAI_API_KEY = "sk-EaIEkoMJooD2u40rZM3BJdmZyusfeaHCuHJAXedjBGL3QsmK"; // Hardcoded for now per plan, ideally in .env
+// AI API 配置
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_API_BASE = process.env.OPENAI_API_BASE || "https://api.openai.com/v1/chat/completions";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+// 伪浏览器请求头池 (随机选择，模拟真实用户)
+const USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+];
+
+function getRandomUserAgent() {
+    return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
 
 // 5. AI Proxy 
 app.post('/api/ai', async (req, res) => {
@@ -185,15 +201,32 @@ app.post('/api/ai', async (req, res) => {
         console.log("------------------------------------------");
         console.log("[AI Proxy] Incoming Request Body:", JSON.stringify(req.body, null, 2));
 
-        const response = await fetch("https://kfc-api.sxxe.net/v1/chat/completions", {
+        // 覆盖 model 为环境变量配置的模型
+        const requestBody = {
+            ...req.body,
+            model: OPENAI_MODEL
+        };
+
+        const userAgent = getRandomUserAgent();
+        console.log("[AI Proxy] Using User-Agent:", userAgent);
+        console.log("[AI Proxy] Target API:", OPENAI_API_BASE);
+        console.log("[AI Proxy] Model:", OPENAI_MODEL);
+
+        const response = await fetch(OPENAI_API_BASE, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                // Server injects the key, replacing whatever frontend sent (or didn't send)
                 "Authorization": `Bearer ${OPENAI_API_KEY}`,
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                "User-Agent": userAgent,
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Origin": "https://chat.openai.com",
+                "Referer": "https://chat.openai.com/"
             },
-            body: JSON.stringify(req.body)
+            body: JSON.stringify(requestBody)
         });
 
         const data = await response.json();
