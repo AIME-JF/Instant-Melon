@@ -2,6 +2,7 @@
 
 一个基于 React + Express + PostgreSQL 的现代化匿名投稿与吃瓜平台。
 支持 AI 毒舌总结、实时评论互动、无限流加载，均已容器化，一键部署。
+在线体验：https://www.jkgt.fun/
 
 ![20251220164848_rec_](https://github.com/user-attachments/assets/6051ff51-ba44-46d7-bc6a-e1dc9be66f08)
 ![img_v3_02t5_c497af66-4ddf-4d64-a8f8-3ad54f73194g](https://github.com/user-attachments/assets/2f02c535-5632-48ef-8670-a1e0f4eb3c5f)
