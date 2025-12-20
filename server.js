@@ -195,19 +195,37 @@ function getRandomUserAgent() {
     return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-// 5. AI Proxy 
+// 5. AI Proxy (增强反缓存机制)
 app.post('/api/ai', async (req, res) => {
     try {
         console.log("------------------------------------------");
         console.log("[AI Proxy] Incoming Request Body:", JSON.stringify(req.body, null, 2));
 
-        // 覆盖 model 为环境变量配置的模型
+        // 生成唯一请求标识，防止缓存
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+
+        // 在 user message 末尾追加随机种子，破坏缓存
+        const messages = req.body.messages ? req.body.messages.map((msg, idx) => {
+            if (msg.role === 'user') {
+                // 追加不可见的随机标识
+                return { ...msg, content: msg.content + `\n[ID:${requestId}]` };
+            }
+            return msg;
+        }) : [];
+
+        // 覆盖 model 为环境变量配置的模型，增加随机性参数
         const requestBody = {
             ...req.body,
-            model: OPENAI_MODEL
+            model: OPENAI_MODEL,
+            messages: messages,
+            temperature: Math.max(0.9, req.body.temperature || 1.0), // 确保高随机性
+            top_p: 0.95,
+            presence_penalty: 0.3,
+            frequency_penalty: 0.3
         };
 
         const userAgent = getRandomUserAgent();
+        console.log("[AI Proxy] Request ID:", requestId);
         console.log("[AI Proxy] Using User-Agent:", userAgent);
         console.log("[AI Proxy] Target API:", OPENAI_API_BASE);
         console.log("[AI Proxy] Model:", OPENAI_MODEL);
@@ -221,10 +239,9 @@ app.post('/api/ai', async (req, res) => {
                 "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
                 "Accept-Encoding": "gzip, deflate, br",
-                "Cache-Control": "no-cache",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
-                "Origin": "https://chat.openai.com",
-                "Referer": "https://chat.openai.com/"
+                "X-Request-ID": requestId
             },
             body: JSON.stringify(requestBody)
         });
@@ -232,6 +249,27 @@ app.post('/api/ai', async (req, res) => {
         const data = await response.json();
         console.log("[AI Proxy] Upstream Status:", response.status);
         console.log("[AI Proxy] Upstream Response Body:", JSON.stringify(data, null, 2));
+
+        // 检测并过滤已知的缓存/错误回复
+        if (data.choices && data.choices[0]?.message?.content) {
+            const content = data.choices[0].message.content;
+            const KNOWN_CACHED_RESPONSES = [
+                "前男友再现",
+                "吃瓜群众忙",
+                "旧情复燃难",
+                "五味杂陈"
+            ];
+
+            const isCached = KNOWN_CACHED_RESPONSES.some(phrase => content.includes(phrase));
+            if (isCached) {
+                console.warn("[AI Proxy] Detected cached/repeated response, returning error to trigger retry");
+                return res.status(503).json({
+                    error: "AI returned cached response, please retry",
+                    cached: true
+                });
+            }
+        }
+
         console.log("------------------------------------------");
 
         if (!response.ok) {
